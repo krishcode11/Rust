@@ -1,0 +1,212 @@
+use std::io;
+use std::cmp::Ordering;
+use rand::Rng;
+
+struct Player {
+    coins: u32,
+    high_score: u32,
+    games_played: u32,
+}
+
+impl Player {
+    fn new() -> Self {
+        Player {
+            coins: 0,
+            high_score: 0,
+            games_played: 0,
+        }
+    }
+
+    fn add_coins(&mut self, amount: u32) {
+        self.coins += amount;
+    }
+
+    fn update_stats(&mut self, score: u32) {
+        self.games_played += 1;
+        if score > self.high_score {
+            self.high_score = score;
+        }
+    }
+}
+
+struct Shop {
+    items: Vec<(String, u32)>,
+}
+
+impl Shop {
+    fn new() -> Self {
+        Shop {
+            items: vec![
+                ("🎲 Extra Hint".to_string(), 300),
+                ("🎯 Range Reducer".to_string(), 500),
+                ("⭐ Lucky Start".to_string(), 750),
+                ("🌟 Golden Guess".to_string(), 1000),
+            ],
+        }
+    }
+
+    fn display_items(&self) {
+        println!("\n=== 🛍️  REWARD SHOP 🛍️  ===");
+        for (index, (item, cost)) in self.items.iter().enumerate() {
+            println!("{}. {} - {} coins", index + 1, item, cost);
+        }
+    }
+}
+
+fn calculate_reward(attempts: u32) -> (u32, &'static str, &'static str) {
+    match attempts {
+        1 => (1000, "🏆 Legendary!", "Perfect guess! Incredible!"),
+        2..=3 => (750, "🥇 Master Guesser!", "Amazing intuition!"),
+        4..=6 => (500, "🥈 Expert!", "Great performance!"),
+        7..=10 => (250, "🥉 Skilled!", "Well done!"),
+        11..=15 => (100, "⭐ Amateur", "Keep practicing!"),
+        _ => (50, "👍 Beginner", "Don't give up!")
+    }
+}
+
+fn play_game(player: &mut Player) {
+    println!("\n=== New Game Starting ===");
+    println!("Your current coins: {} 🪙", player.coins);
+    
+    let secret_number = rand::thread_rng().gen_range(1..=100);
+    let mut attempts = 0;
+    let mut range_reduced = false;
+    let mut hint_used = false;
+
+    println!("I'm thinking of a number between 1 and 100...");
+
+    // Shop phase
+    if player.coins >= 300 {
+        let shop = Shop::new();
+        println!("\nWould you like to visit the shop before playing? (y/n):");
+        let mut shop_choice = String::new();
+        io::stdin()
+            .read_line(&mut shop_choice)
+            .expect("Failed to read line");
+
+        if shop_choice.trim().to_lowercase() == "y" {
+            shop.display_items();
+            println!("\nEnter item number to purchase (or 0 to skip):");
+            let mut item_choice = String::new();
+            io::stdin()
+                .read_line(&mut item_choice)
+                .expect("Failed to read line");
+
+            if let Ok(choice) = item_choice.trim().parse::<usize>() {
+                match choice {
+                    1 if player.coins >= 300 => {
+                        player.coins -= 300;
+                        hint_used = true;
+                        println!("🎲 Hint purchased! The number is {} than 50", 
+                            if secret_number > 50 { "greater" } else { "less" });
+                    },
+                    2 if player.coins >= 500 => {
+                        player.coins -= 500;
+                        range_reduced = true;
+                        let lower = (secret_number - 20).max(1);
+                        let upper = (secret_number + 20).min(100);
+                        println!("🎯 Range reduced! The number is between {} and {}", lower, upper);
+                    },
+                    3 if player.coins >= 750 => {
+                        player.coins -= 750;
+                        attempts -= 2; // Give player 2 free attempts
+                        println!("⭐ Lucky Start activated! You'll get 2 free attempts!");
+                    },
+                    4 if player.coins >= 1000 => {
+                        player.coins -= 1000;
+                        println!("🌟 Golden Guess activated! You'll get double coins for this game!");
+                    },
+                    0 => println!("Skipping shop..."),
+                    _ => println!("Invalid choice or insufficient coins."),
+                }
+            }
+        }
+    }
+
+    loop {
+        println!("\nEnter your guess:");
+
+        let mut guess = String::new();
+        io::stdin()
+            .read_line(&mut guess)
+            .expect("Failed to read line");
+
+        attempts += 1;
+
+        let guess: u32 = match guess.trim().parse() {
+            Ok(num) => num,
+            Err(_) => {
+                println!("❌ Please enter a valid number!");
+                continue;
+            }
+        };
+
+        if guess < 1 || guess > 100 {
+            println!("❌ Please enter a number between 1 and 100!");
+            continue;
+        }
+
+        match guess.cmp(&secret_number) {
+            Ordering::Less => println!("📈 Too small! Aim higher!"),
+            Ordering::Greater => println!("📉 Too big! Aim lower!"),
+            Ordering::Equal => {
+                let (coins, rank, message) = calculate_reward(attempts);
+                let final_coins = if range_reduced || hint_used { coins / 2 } else { coins };
+                
+                println!("\n🎉 Congratulations! You've won!");
+                println!("Number: {} | Attempts: {}", secret_number, attempts);
+                println!("---------------------------");
+                println!("🏅 Final Rank: {}", rank);
+                println!("💬 {}", message);
+                println!("🪙 Coins earned: {}", final_coins);
+                if range_reduced || hint_used {
+                    println!("(Coins halved due to using power-ups)");
+                }
+                println!("---------------------------");
+
+                player.add_coins(final_coins);
+                player.update_stats(final_coins);
+                break;
+            }
+        }
+
+        println!("Attempts so far: {}", attempts);
+    }
+}
+
+fn main() {
+    println!("=== Welcome to the Guessing Game with Rewards! ===");
+    println!("\nRewards System:");
+    println!("1 attempt    - Legendary  (1000 coins)");
+    println!("2-3 attempts - Master    (750 coins)");
+    println!("4-6 attempts - Expert    (500 coins)");
+    println!("7-10 attempts - Skilled   (250 coins)");
+    println!("11-15 attempts - Amateur  (100 coins)");
+    println!("16+ attempts - Beginner  (50 coins)");
+
+    let mut player = Player::new();
+
+    loop {
+        play_game(&mut player);
+
+        println!("\n=== Player Stats ===");
+        println!("Total Coins: {} 🪙", player.coins);
+        println!("Games Played: {}", player.games_played);
+        println!("High Score: {}", player.high_score);
+
+        println!("\nWould you like to play again? (y/n):");
+        let mut play_again = String::new();
+        io::stdin()
+            .read_line(&mut play_again)
+            .expect("Failed to read line");
+
+        if play_again.trim().to_lowercase() != "y" {
+            println!("\n=== Final Stats ===");
+            println!("Total Coins Earned: {} 🪙", player.coins);
+            println!("Games Played: {}", player.games_played);
+            println!("Best Score: {}", player.high_score);
+            println!("\nThanks for playing! Come back soon! 👋");
+            break;
+        }
+    }
+}
